@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "paypay-module"  
+name = "siudayo-paypay"  
 version = "0.2.0"
 description = "Enhanced PayPay Module with AWS WAF Bypass Support"
 readme = "README.md"
