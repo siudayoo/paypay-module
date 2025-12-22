@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "siudayo-paypay"  
-version = "0.3.0"
+version = "0.4.0"
 description = "Enhanced PayPay Module with AWS WAF Bypass Support"
 readme = "README.md"
 requires-python = ">=3.8"
