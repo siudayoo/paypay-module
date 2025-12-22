@@ -1,8 +1,3 @@
-"""
-Enhanced PayPay Module with AWS WAF Bypass Support
-AWS WAF バイパス機能を含む拡張版 PayPay モジュール
-"""
-
 import os
 import json
 import time
@@ -21,9 +16,7 @@ from typing import Union, Callable, Any, NamedTuple
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
-# ==================== Crypto Module ====================
 class Crypto:
-    """暗号化/復号化ユーティリティ"""
     
     key = bytes.fromhex("6f71a512b1e035eaab53d8be73120d3fb68a0ca346b9560aab3e5cdf753d5e98")
     aes_gcm = AESGCM(key)
@@ -42,7 +35,6 @@ class Crypto:
     
     @staticmethod
     def decrypt(string: str) -> bytes:
-        """AES-GCMで復号化"""
         parts = string.split("::")
         iv = base64.b64decode(parts[0])
         tag = bytes.fromhex(parts[1])
@@ -51,13 +43,10 @@ class Crypto:
         return Crypto.aes_gcm.decrypt(iv, text + tag, None)
 
 
-# ==================== Fingerprint Module ====================
 class Fingerprint:
-    """ブラウザフィンガープリント生成"""
     
     @staticmethod
     def encode(obj: dict) -> tuple:
-        """オブジェクトをエンコードしてチェックサムを生成"""
         payload = json.dumps(obj, separators=(",", ":")).encode()
         
         crc = zlib.crc32(payload) & 0xFFFFFFFF
@@ -68,10 +57,8 @@ class Fingerprint:
     
     @staticmethod
     def fingerprint() -> tuple:
-        """ブラウザフィンガープリントを生成"""
         start = int(time.time() * 1000)
         
-        # WebGL データ
         webgl_data = {
             "webgl_unmasked_renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)",
             "webgl": [{
@@ -86,12 +73,10 @@ class Fingerprint:
             }]
         }
         
-        # Canvas ヒストグラムビン
         bins = [random.randrange(0, 40) for _ in range(256)]
         bins[0] = random.randrange(14473, 16573)
         bins[-1] = random.randrange(14473, 16573)
         
-        # フィンガープリントペイロード
         fp = {
             "metrics": {
                 "fp2": 1, "browser": 0, "capabilities": 1, "gpu": 7,
@@ -171,13 +156,10 @@ class Fingerprint:
         return checksum.decode(), Crypto.encrypt(data)
 
 
-# ==================== Verify Module ====================
 class Verify:
-    """PoW (Proof of Work) チャレンジ検証"""
     
     @staticmethod
     def _check(digest: bytes, difficulty: int) -> bool:
-        """難易度チェック"""
         full, rem = divmod(difficulty, 8)
         if digest[:full] != b"\x00" * full:
             return False
@@ -187,7 +169,6 @@ class Verify:
     
     @staticmethod
     def _scrypt(input: str, salt: str, memory_cost: int) -> str:
-        """Scrypt ハッシュ"""
         return binascii.hexlify(
             pyscrypt.hash(
                 password=input.encode(),
@@ -222,7 +203,6 @@ class Verify:
                 return str(nonce)
         return None
     
-    # チャレンジタイプマッピング
     CHALLENGE_TYPES = {
         "h72f957df656e80ba55f5d8ce2e8c7ccb59687dba3bfb273d54b08a261b2f3002": compute_scrypt_nonce,
         "h7b0c470f0cfe3a80a9e26526ad185f484f6817d0832712a4a37a908786a6a67f": pow,
@@ -230,9 +210,7 @@ class Verify:
     }
 
 
-# ==================== AWS WAF Solver ====================
 class AwsWafSolver:
-    """AWS WAF チャレンジソルバー"""
     
     def __init__(self, proxy: str = None):
         self.session = tls_client.Session(
@@ -263,7 +241,6 @@ class AwsWafSolver:
         }
     
     def get_goku_props(self) -> dict:
-        """Goku Props を取得"""
         response = self.session.get(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/authorize",
             headers={
@@ -276,7 +253,6 @@ class AwsWafSolver:
         return goku_props
     
     def get_inputs(self) -> dict:
-        """WAF チャレンジ入力を取得"""
         response = self.session.get(
             "https://02dad1968f9c.81b5a82a.ap-northeast-1.token.awswaf.com/02dad1968f9c/a61454b1ee5d/2748e176355d/inputs",
             params={"client": "browser"}
@@ -284,7 +260,6 @@ class AwsWafSolver:
         return response
     
     def build_payload(self) -> dict:
-        """WAF チャレンジペイロードを構築"""
         inputs = self.get_inputs()
         goku_props = self.get_goku_props()
         checksum, fp = Fingerprint.fingerprint()
@@ -319,7 +294,6 @@ class AwsWafSolver:
         return payload
     
     def get_token(self) -> str:
-        """WAF トークンを取得"""
         try:
             payload = self.build_payload()
             response = self.session.post(
@@ -334,13 +308,10 @@ class AwsWafSolver:
         return None
 
 
-# ==================== PayPay Utils ====================
 class PayPayUtils:
-    """PayPay ユーティリティ関数"""
     
     @staticmethod
     def generate_vector(r1: tuple, r2: tuple, r3: tuple, precision: int = 8) -> str:
-        """デバイス状態ベクトルを生成"""
         v1 = f"{random.uniform(*r1):.{precision}f}"
         v2 = f"{random.uniform(*r2):.{precision}f}"
         v3 = f"{random.uniform(*r3):.{precision}f}"
@@ -348,7 +319,6 @@ class PayPayUtils:
     
     @staticmethod
     def generate_device_state():
-        """デバイス状態ヘッダーを生成"""
         class DeviceHeaders(NamedTuple):
             device_orientation: str
             device_orientation_2: str
@@ -368,7 +338,7 @@ class PayPayUtils:
     
     @staticmethod
     def update_device_headers(headers: dict) -> dict:
-        """ヘッダーにデバイス状態を設定"""
+
         state = PayPayUtils.generate_device_state()
         headers.update({
             "Device-Orientation": state.device_orientation,
@@ -383,41 +353,21 @@ class PayPayUtils:
 
 # ==================== Exceptions ====================
 class PayPayException(Exception):
-    """PayPay 一般エラー"""
     pass
 
 class PayPayLoginError(Exception):
-    """PayPay ログインエラー"""
     pass
 
 class PayPayNetworkError(Exception):
-    """PayPay ネットワークエラー"""
     pass
 
 class AwsWafException(Exception):
-    """AWS WAF エラー"""
     pass
 
 
 # ==================== Enhanced PayPay Class ====================
 class EnhancedPayPay:
-    """
-    AWS WAF バイパス機能を含む拡張版 PayPay クラス
-    
-    使用例:
-        # アクセストークンでログイン
-        paypay = EnhancedPayPay(access_token="your_token")
-        
-        # 電話番号・パスワードでログイン
-        paypay = EnhancedPayPay()
-        paypay.login_start("080-1234-5678", "password")
-        # 2FAコードを入力
-        paypay.login_confirm("TK4602")
-        
-        # 残高取得
-        balance = paypay.get_balance()
-        print(f"残高: {balance.useable_balance}円")
-    """
+
     
     def __init__(self, 
                  access_token: str = None,
@@ -425,30 +375,19 @@ class EnhancedPayPay:
                  client_uuid: str = None,
                  proxy: str = None,
                  enable_waf_bypass: bool = True):
-        """
-        初期化
-        
-        Args:
-            access_token: アクセストークン（既存のセッション用）
-            device_uuid: デバイスUUID
-            client_uuid: クライアントUUID
-            proxy: プロキシ (例: "127.0.0.1:8080")
-            enable_waf_bypass: AWS WAFバイパスを有効化
-        """
+                     
         self.access_token = access_token
         self.device_uuid = device_uuid or str(uuid.uuid4())
         self.client_uuid = client_uuid or str(uuid.uuid4())
         self.proxy = proxy
         self.version = "5.11.1"
         
-        # セッション初期化
         self.session = requests.Session()
         self.webview_session = tls_client.Session(
             client_identifier="chrome_132",
             random_tls_extension_order=True
         )
         
-        # プロキシ設定
         if self.proxy:
             proxies = {
                 "http": f"http://{proxy}",
@@ -457,7 +396,6 @@ class EnhancedPayPay:
             self.session.proxies.update(proxies)
             self.webview_session.proxies.update(proxies)
         
-        # AWS WAF バイパス
         self.waf_token = None
         if enable_waf_bypass:
             try:
@@ -474,7 +412,6 @@ class EnhancedPayPay:
             except Exception as e:
                 print(f"警告: AWS WAF バイパス失敗 - {e}")
         
-        # ヘッダー設定
         device_state = PayPayUtils.generate_device_state()
         self.params = {"payPayLang": "ja"}
         
@@ -517,26 +454,17 @@ class EnhancedPayPay:
             self.headers["Authorization"] = f"Bearer {self.access_token}"
             self.headers["Content-Type"] = "application/json"
     
-    # ==================== 認証メソッド ====================
     
     def login_start(self, phone: str, password: str):
-        """
-        ログイン開始（2FA前）
         
-        Args:
-            phone: 電話番号
-            password: パスワード
-        """
         if self.access_token:
             raise PayPayException("既にログイン済みです")
         
         if "-" in phone:
             phone = phone.replace("-", "")
         
-        # PKCE生成
         self.verifier, self.challenge = pkce.generate_pkce_pair(43)
         
-        # PAR リクエスト
         response = self.session.post(
             "https://app4.paypay.ne.jp/bff/v2/oauth2/par",
             params=self.params,
@@ -567,12 +495,10 @@ class EnhancedPayPay:
         
         request_uri = data["payload"]["requestUri"]
         
-        # WebView フロー
         self._webview_authorize(request_uri)
         self._webview_signin_page()
         self._webview_par_check()
         
-        # パスワード認証
         response = self.webview_session.post(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/sign-in/password",
             headers=self._get_webview_headers(
@@ -592,25 +518,17 @@ class EnhancedPayPay:
         except:
             raise PayPayNetworkError("日本以外からは接続できません")
         
-        # デバイスUUIDが登録済みか確認
         try:
             uri = data["payload"]["redirectUrl"].replace("paypay://oauth2/callback?", "").split("&")
             return self._complete_token_exchange(uri[0].replace("code=", ""))
         except:
-            # 2FA が必要
             self._start_2fa_flow()
     
     def login_confirm(self, accept_url: str):
-        """
-        2FA確認でログイン完了
         
-        Args:
-            accept_url: 2FA確認URL または ID
-        """
         if "https://" in accept_url:
             accept_url = accept_url.replace("https://www.paypay.ne.jp/portal/oauth2/l?id=", "")
         
-        # OTL 検証
         response = self.webview_session.post(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/extension/sign-in/2fa/otl/verify",
             headers=self._get_webview_headers(
@@ -638,7 +556,7 @@ class EnhancedPayPay:
             raise PayPayLoginError("認証コードの取得に失敗しました")
     
     def token_refresh(self, refresh_token: str):
-        """トークンをリフレッシュ"""
+
         if not self.access_token:
             raise PayPayLoginError("まずはログインしてください")
         
@@ -661,10 +579,9 @@ class EnhancedPayPay:
         
         return response
     
-    # ==================== データ取得メソッド ====================
     
     def get_profile(self):
-        """プロフィール取得"""
+
         response = self.session.get(
             "https://app4.paypay.ne.jp/bff/v2/getProfileDisplayInfo",
             headers=self.headers,
@@ -693,7 +610,7 @@ class EnhancedPayPay:
         )
     
     def get_balance(self):
-        """残高取得"""
+
         response = self.session.get(
             "https://app4.paypay.ne.jp/bff/v1/getBalanceInfo",
             headers=self.headers,
@@ -736,7 +653,7 @@ class EnhancedPayPay:
         )
     
     def get_history(self, size: int = 20, cashback: bool = False):
-        """履歴取得"""
+
         params = {
             "pageSize": str(size),
             "orderTypes": "CASHBACK" if cashback else "",
@@ -757,10 +674,9 @@ class EnhancedPayPay:
         
         return response
     
-    # ==================== リンク関連メソッド ====================
     
     def check_link(self, url: str):
-        """送金リンク確認"""
+
         if "https://" in url:
             url = url.replace("https://pay.paypay.ne.jp/", "")
         
@@ -804,7 +720,7 @@ class EnhancedPayPay:
         )
     
     def accept_link(self, url: str, passcode: str = None):
-        """送金リンク受取"""
+
         if "https://" in url:
             url = url.replace("https://pay.paypay.ne.jp/", "")
         
@@ -831,7 +747,7 @@ class EnhancedPayPay:
         return response["header"]["resultCode"] == "S0000"
     
     def reject_link(self, url: str):
-        """送金リンク辞退"""
+
         if "https://" in url:
             url = url.replace("https://pay.paypay.ne.jp/", "")
         
@@ -857,7 +773,7 @@ class EnhancedPayPay:
         return response["header"]["resultCode"] == "S0000"
     
     def create_link(self, amount: int, passcode: str = None):
-        """送金リンク作成"""
+
         payload = {
             "requestId": str(uuid.uuid4()),
             "amount": amount,
@@ -892,7 +808,7 @@ class EnhancedPayPay:
         )
     
     def create_p2pcode(self, amount: int = None):
-        """受取用QRコード作成"""
+
         payload = {
             "amount": amount,
             "sessionId": str(uuid.uuid4()) if amount else None
@@ -914,10 +830,9 @@ class EnhancedPayPay:
         
         return P2PCode(response["payload"]["p2pCode"], response)
     
-    # ==================== 内部ヘルパーメソッド ====================
     
     def _webview_authorize(self, request_uri: str):
-        """WebView認証フロー"""
+
         self.webview_session.get(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/authorize",
             params={
@@ -928,7 +843,7 @@ class EnhancedPayPay:
         )
     
     def _webview_signin_page(self):
-        """WebViewサインインページ"""
+
         self.webview_session.get(
             "https://www.paypay.ne.jp/portal/oauth2/sign-in",
             params={"client_id": "pay2-mobile-app-client", "mode": "landing"},
@@ -936,7 +851,7 @@ class EnhancedPayPay:
         )
     
     def _webview_par_check(self):
-        """WebView PAR確認"""
+
         response = self.webview_session.get(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/par/check",
             headers=self._get_webview_headers(
@@ -948,8 +863,7 @@ class EnhancedPayPay:
             raise PayPayLoginError(response)
     
     def _start_2fa_flow(self):
-        """2FAフロー開始"""
-        # コードグラント更新
+
         self.webview_session.post(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/extension/code-grant/update",
             headers=self._get_webview_headers(
@@ -958,7 +872,6 @@ class EnhancedPayPay:
             json={}
         )
         
-        # 2FAフロー選択
         self.webview_session.post(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/extension/code-grant/update",
             headers=self._get_webview_headers(
@@ -979,7 +892,6 @@ class EnhancedPayPay:
             }
         )
         
-        # OTLリクエスト
         self.webview_session.post(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/extension/code-grant/side-channel/next-action-polling",
             headers=self._get_webview_headers(
@@ -989,7 +901,7 @@ class EnhancedPayPay:
         )
     
     def _complete_token_exchange(self, code: str):
-        """トークン交換を完了"""
+
         headers = self.headers.copy()
         headers.pop("Device-Lock-Type", None)
         headers.pop("Device-Lock-App-Setting", None)
@@ -1018,7 +930,7 @@ class EnhancedPayPay:
         return True
     
     def _get_webview_headers(self, referer: str = None) -> dict:
-        """WebViewヘッダーを取得"""
+
         headers = {
             "Accept": "application/json, text/plain, */*",
             "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -1048,7 +960,7 @@ class EnhancedPayPay:
         return headers
     
     def bypass(self):
-        """アンチボット検出バイパス"""
+
         try:
             response = self.session.get(
                 "https://app4.paypay.ne.jp/bff/v1/getGlobalServiceStatus",
@@ -1082,31 +994,26 @@ class EnhancedPayPay:
             return False
 
 
-# 使用例
 if __name__ == "__main__":
-    # 例1: アクセストークンでログイン
+
     paypay = EnhancedPayPay(access_token="your_access_token_here")
     
-    # 例2: 電話番号・パスワードでログイン
     paypay = EnhancedPayPay()
     paypay.login_start("080-1234-5678", "your_password")
-    # 2FA コードを入力
+
     paypay.login_confirm("TK4602")
     
-    # プロフィール取得
     profile = paypay.get_profile()
     if profile:
         print(f"名前: {profile.name}")
         print(f"ID: {profile.external_user_id}")
     
-    # 残高取得
     balance = paypay.get_balance()
     if balance:
         print(f"残高: {balance.useable_balance}円")
         print(f"マネー: {balance.money}円")
         print(f"マネーライト: {balance.money_light}円")
     
-    # 送金リンク作成
     link = paypay.create_link(amount=100, passcode="1234")
     if link:
         print(f"リンク: {link.link}")-client"
@@ -1121,7 +1028,6 @@ if __name__ == "__main__":
         except:
             raise PayPayNetworkError("日本以外からは接続できません")
         
-        # OTL 完了
         response = self.webview_session.post(
             "https://www.paypay.ne.jp/portal/api/v2/oauth2/extension/code-grant/update",
             headers=self._get_webview_headers(
